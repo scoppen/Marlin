@@ -2444,6 +2444,12 @@ inline void gcode_G28() {
 
 #elif defined(ENABLE_AUTO_BED_LEVELING)
 
+  void out_of_range_error(const char *edge) {
+    char msg[40];
+    sprintf_P(msg, PSTR("?Probe %s position out of range.\n"), edge);
+    SERIAL_PROTOCOL(msg);
+  }
+
   /**
    * G29: Detailed Z-Probe, probes the bed at 3 or more points.
    *      Will fail if the printer has not been homed with G28.
@@ -2539,19 +2545,19 @@ inline void gcode_G28() {
 
       if (left_out || right_out || front_out || back_out) {
         if (left_out) {
-          SERIAL_PROTOCOLPGM("?Probe (L)eft position out of range.\n");
+          out_of_range_error(PSTR("(L)eft"));
           left_probe_bed_position = left_out_l ? MIN_PROBE_X : right_probe_bed_position - MIN_PROBE_EDGE;
         }
         if (right_out) {
-          SERIAL_PROTOCOLPGM("?Probe (R)ight position out of range.\n");
+          out_of_range_error(PSTR("(R)ight"));
           right_probe_bed_position = right_out_r ? MAX_PROBE_X : left_probe_bed_position + MIN_PROBE_EDGE;
         }
         if (front_out) {
-          SERIAL_PROTOCOLPGM("?Probe (F)ront position out of range.\n");
+          out_of_range_error(PSTR("(F)ront"));
           front_probe_bed_position = front_out_f ? MIN_PROBE_Y : back_probe_bed_position - MIN_PROBE_EDGE;
         }
         if (back_out) {
-          SERIAL_PROTOCOLPGM("?Probe (B)ack position out of range.\n");
+          out_of_range_error(PSTR("(B)ack"));
           back_probe_bed_position = back_out_b ? MAX_PROBE_Y : front_probe_bed_position + MIN_PROBE_EDGE;
         }
         return;
@@ -3170,7 +3176,7 @@ inline void gcode_M42() {
     if (code_seen('X') || code_seen('x')) {
       X_probe_location = code_value() - X_PROBE_OFFSET_FROM_EXTRUDER;
       if (X_probe_location < X_MIN_POS || X_probe_location > X_MAX_POS) {
-        SERIAL_PROTOCOLPGM("?X position out of range.\n");
+        out_of_range_error(PSTR("X"));
         return;
       }
     }
@@ -3178,7 +3184,7 @@ inline void gcode_M42() {
     if (code_seen('Y') || code_seen('y')) {
       Y_probe_location = code_value() -  Y_PROBE_OFFSET_FROM_EXTRUDER;
       if (Y_probe_location < Y_MIN_POS || Y_probe_location > Y_MAX_POS) {
-        SERIAL_PROTOCOLPGM("?Y position out of range.\n");
+        out_of_range_error(PSTR("Y"));
         return;
       }
     }
@@ -5220,81 +5226,82 @@ void process_next_command() {
   while (*current_command_args == ' ') ++current_command_args;
 
   // Interpret the code int
+  seen_pointer = current_command;
   codenum = code_value_short();
 
   // Handle a known G, M, or T
   switch(command_code) {
     case 'G': switch (codenum) {
 
-    // G0, G1
-    case 0:
-    case 1:
-      gcode_G0_G1();
-      break;
-
-    // G2, G3
-    #ifndef SCARA
-      case 2: // G2  - CW ARC
-      case 3: // G3  - CCW ARC
-        gcode_G2_G3(codenum == 2);
-        break;
-    #endif
-
-    // G4 Dwell
-    case 4:
-      gcode_G4();
-      break;
-
-    #ifdef FWRETRACT
-
-      case 10: // G10: retract
-      case 11: // G11: retract_recover
-        gcode_G10_G11(codenum == 10);
+      // G0, G1
+      case 0:
+      case 1:
+        gcode_G0_G1();
         break;
 
-    #endif //FWRETRACT
+      // G2, G3
+      #ifndef SCARA
+        case 2: // G2  - CW ARC
+        case 3: // G3  - CCW ARC
+          gcode_G2_G3(codenum == 2);
+          break;
+      #endif
 
-    case 28: // G28: Home all axes, one at a time
-      gcode_G28();
-      break;
-
-    #if defined(ENABLE_AUTO_BED_LEVELING) || defined(MESH_BED_LEVELING)
-      case 29: // G29 Detailed Z-Probe, probes the bed at 3 or more points.
-        gcode_G29();
+      // G4 Dwell
+      case 4:
+        gcode_G4();
         break;
-    #endif
 
-    #ifdef ENABLE_AUTO_BED_LEVELING
+      #ifdef FWRETRACT
 
-      #ifndef Z_PROBE_SLED
-
-        case 30: // G30 Single Z Probe
-          gcode_G30();
+        case 10: // G10: retract
+        case 11: // G11: retract_recover
+          gcode_G10_G11(codenum == 10);
           break;
 
-      #else // Z_PROBE_SLED
+      #endif //FWRETRACT
 
-          case 31: // G31: dock the sled
-          case 32: // G32: undock the sled
-            dock_sled(codenum == 31);
+      case 28: // G28: Home all axes, one at a time
+        gcode_G28();
+        break;
+
+      #if defined(ENABLE_AUTO_BED_LEVELING) || defined(MESH_BED_LEVELING)
+        case 29: // G29 Detailed Z-Probe, probes the bed at 3 or more points.
+          gcode_G29();
+          break;
+      #endif
+
+      #ifdef ENABLE_AUTO_BED_LEVELING
+
+        #ifndef Z_PROBE_SLED
+
+          case 30: // G30 Single Z Probe
+            gcode_G30();
             break;
 
-      #endif // Z_PROBE_SLED
+        #else // Z_PROBE_SLED
 
-    #endif // ENABLE_AUTO_BED_LEVELING
+            case 31: // G31: dock the sled
+            case 32: // G32: undock the sled
+              dock_sled(codenum == 31);
+              break;
 
-    case 90: // G90
-      relative_mode = false;
-      break;
-    case 91: // G91
-      relative_mode = true;
-      break;
+        #endif // Z_PROBE_SLED
 
-    case 92: // G92
-      gcode_G92();
-      break;
+      #endif // ENABLE_AUTO_BED_LEVELING
 
-    default: code_is_good = false;
+      case 90: // G90
+        relative_mode = false;
+        break;
+      case 91: // G91
+        relative_mode = true;
+        break;
+
+      case 92: // G92
+        gcode_G92();
+        break;
+
+      default: code_is_good = false;
     }
     break;
 
@@ -5384,6 +5391,8 @@ void process_next_command() {
       case 109: // M109: Wait for temperature
         gcode_M109();
         break;
+
+      case 110: break; // M110: Set line number - don't show "unknown command"
 
       #if HAS_TEMP_BED
         case 190: // M190: Wait for bed heater to reach target
